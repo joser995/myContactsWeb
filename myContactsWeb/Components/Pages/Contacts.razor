@@ -1,0 +1,211 @@
+﻿@page "/"
+@using myContacts.Models
+@using myContactsWeb.Services.Implementations
+@using myContactsWeb.Services.Interfaces
+@inject IContactsApiService ContactsApiService
+@inject IJSRuntime JSRuntime
+@using Microsoft.AspNetCore.Authorization
+@rendermode InteractiveServer
+@* @attribute [StreamRendering] *@
+@attribute [Authorize]
+
+
+<PageTitle>Contacts</PageTitle>
+
+
+@if (contactsList == null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <div class="card">
+        <div class="card-header p-0 position-relative mt-n4 mx-3 z-index-2">
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="input-group input-group-outline mb-3">
+                        <InputText @bind-Value="filterText" id="searchFilter" type="text" class="form-control" />
+                        <label for="searchFilter" class="form-label">Filter</label>
+                    </div>
+
+                    <button @onclick="@(async () => await FilterList())" class="btn bg-gradient-info"> Search </button>
+                </div>
+
+                <div class="col-md-6 text-right">
+                    <button type="button" class="btn bg-gradient-primary" data-bs-toggle="modal" data-bs-target="#addContactModal">
+                        Add Contact
+                    </button>
+                </div>
+            </div>
+        </div>
+        <hr class="dark horizontal my-0">
+        <div class="card-body px-4 pt-2">
+            <div class="table-responsive">
+                <table class="table align-items-center mb-0">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Phone</th>
+                            <th>Fax</th>
+                            <th>Email</th>
+                            <th>Notes</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (Contact contact in contactsList)
+                        {
+                            <tr>
+                                <td>@contact.Name</td>
+                                <td>@contact.Phone</td>
+                                <td>@contact.Fax</td>
+                                <td>@contact.Email</td>
+                                <td>@contact.Notes</td>
+                                <td>
+                                    <button @onclick="@(async () => await DeleteContact(contact.ContactId))" class="btn btn-icon btn-2 btn-primary" type="button">
+                                        <span class="btn-inner--icon"><i class="fa-regular fa-trash-can"></i></span>
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal -->
+    <div class="modal fade" id="addContactModal" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered" role="document">
+            <div class="modal-content">
+                <EditForm Model="@newContact" OnValidSubmit="AddContact" FormName="addContact" method="post" >                    
+                    <div class="modal-body">
+                        <DataAnnotationsValidator />
+                        <ValidationSummary class="text-danger" role="alert" />
+                        <div class="row">
+                            <div class="col-md-12">
+                                <div class="input-group input-group-outline my-3">
+                                    <label class="form-label">Name</label>
+                                    <InputText @bind-Value="newContact.Name" type="text" class="form-control" />
+                                    <ValidationMessage For="() => newContact.Name" class="text-danger" />
+                                </div>                                
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-8">
+                                <div class="input-group input-group-outline my-3">
+                                    <label class="form-label">Phone</label>
+                                    <InputText @bind-Value="newContact.Phone" type="tel" class="form-control" />
+                                    <ValidationMessage For="() => newContact.Phone" class="text-danger" />
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-8">
+                                <div class="input-group input-group-outline my-3">
+                                    <label class="form-label">Fax</label>
+                                    <InputText @bind-Value="newContact.Fax" type="tel" class="form-control" />
+                                    <ValidationMessage For="() => newContact.Fax" class="text-danger" />
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-12">
+                                <div class="input-group input-group-outline my-3">
+                                    <label class="form-label">Email</label>
+                                    <InputText @bind-Value="newContact.Email" type="email" class="form-control" />
+                                    <ValidationMessage For="() => newContact.Email" class="text-danger" />
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-12">
+                                <div class="input-group input-group-outline my-3">
+                                    <label class="form-label">Notes</label>
+                                    <InputTextArea @bind-Value="newContact.Notes" class="form-control"></InputTextArea>
+                                    <ValidationMessage For="() => newContact.Notes" class="text-danger" />
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn bg-gradient-secondary" data-bs-dismiss="modal">Close</button>
+                        <button type="submit" class="btn bg-gradient-primary">Save changes</button>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public IEnumerable<Contact>? contactsList { get; set; }
+
+    [SupplyParameterFromForm]
+    private Contact newContact { get; set; } = new Contact() { Name = "", Phone = "", Email = "" };
+
+    [Parameter]
+    public string? filterText { get; set; }
+
+    private string? errorMessage;
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            // Simulate asynchronous loading to demonstrate streaming rendering
+            await Task.Delay(100);
+
+            contactsList = await ContactsApiService.GetContacts() ?? throw new Exception("Empty Conttact List");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.Message);
+        }
+    }
+    private async Task FilterList()
+    {
+        if (contactsList != null && !string.IsNullOrEmpty(filterText))
+        {
+            contactsList = contactsList.Where(c => c.Name.Contains(filterText));
+        }
+        else
+        {
+            contactsList = await ContactsApiService.GetContacts() ?? throw new Exception("Empty Conttact List");
+        }
+        
+    }
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+
+        await base.OnAfterRenderAsync(firstRender);
+        await JSRuntime.InvokeVoidAsync("setModalDraggableAndResizable");
+
+    }
+    private async Task AddContact()
+    {
+        try
+        {
+            await ContactsApiService.PostContact(newContact);
+            contactsList = await ContactsApiService.GetContacts() ?? throw new Exception("Empty Conttact List");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.Message);
+        }
+    }
+    private async Task DeleteContact(int id)
+    {
+        try
+        {
+            await ContactsApiService.DeleteContact(id);            
+            contactsList = await ContactsApiService.GetContacts() ?? throw new Exception("Empty Conttact List");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.Message);
+        }
+    }
+
+}
